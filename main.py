@@ -6,7 +6,7 @@ import os
 # 🔹 CONFIG
 URLS = [
     "https://zealy.io/c/syndicateapp/questboard/sprints",
-    "https://zealy.io/cw/tucanbit/questboard/sprints",
+    "https://zealy.io/cw/2up/questboard/sprints",
     "https://zealy.io/cw/ubuntuone/questboard/sprints",
     "https://zealy.io/cw/vantatemplecommunity/questboard/sprints",
     "https://zealy.io/cw/trustyfy/questboard/sprints"
