@@ -1,139 +1,77 @@
 import requests
 import time
 import hashlib
-import logging
-import random
-from bs4 import BeautifulSoup
+import os
 
-# =========================
-# CONFIG
-# =========================
+# 🔹 CONFIG
 URLS = [
-    "https://zealy.io/cw/trustyfy/questboard/sprints",
-    "https://zealy.io/cw/vemevmsc/questboard/sprints",
+    "https://zealy.io/c/syndicateapp/questboard/sprints",
+    "https://zealy.io/cw/tucanbit/questboard/sprints",
+    "https://zealy.io/cw/ubuntuone/questboard/sprints",
     "https://zealy.io/cw/vantatemplecommunity/questboard/sprints",
-    "https://zealy.io/cw/syndicateapp/questboard/sprints"
+    "https://zealy.io/cw/trustyfy/questboard/sprints"
 ]
 
-MIN_DELAY = 4
-MAX_DELAY = 7
+# 🔹 Get Telegram Bot Token from Railway environment variable
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-BOT_TOKEN = "8737938934:AAFlrX49kVtPg6iPjwNDJQblzscO3zsz10E"
+# ✅ Telegram chat IDs
+CHAT_IDS = ["7344418472", "6214087128", "7612005744", "7489135670"]
 
-CHAT_IDS = [
-    "7344418472",
-    "6214087128",
-    "7612005744",
-    "7489135670"
-]
+# 🔹 HEADERS for Zealy
+headers = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept-Language": "en-US,en;q=0.9"
+}
 
-# =========================
-# LOGGING
-# =========================
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
-
-seen_tasks = {}
-
-# =========================
-# TELEGRAM
-# =========================
-def send_telegram(msg):
+# 🔹 SEND MESSAGE TO TELEGRAM
+def send(msg):
     for chat_id in CHAT_IDS:
         try:
-            url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-            data = {
-                "chat_id": chat_id,
-                "text": msg,
-                "disable_web_page_preview": True
-            }
-            requests.post(url, data=data, timeout=10)
+            r = requests.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                params={"chat_id": chat_id, "text": msg},
+                timeout=10
+            )
+            print(f"📩 Sent to {chat_id} | Status:", r.status_code)
         except Exception as e:
-            logging.error(f"Telegram error: {e}")
+            print(f"❌ Telegram error for {chat_id}:", e)
 
-# =========================
-# FETCH TASKS
-# =========================
-def fetch_tasks(url):
+# 🔹 GET WEBSITE HASH
+def get_hash(url):
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Referer": url,
-            "Origin": "https://zealy.io"
-        }
+        r = requests.get(url, headers=headers, timeout=15)
+        print(f"🌐 {url} status:", r.status_code)
 
-        response = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200:
+            return None
 
-        if response.status_code != 200:
-            logging.warning(f"Bad response {response.status_code} from {url}")
-            return []
+        return hashlib.md5(r.text.encode()).hexdigest()
 
-        soup = BeautifulSoup(response.text, "html.parser")
+    except requests.exceptions.Timeout:
+        print(f"⏰ Timeout while connecting to {url}")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Website error for {url}:", e)
+        return None
 
-        tasks = []
+# 🔹 START
+print("🚀 Starting Zealy Monitor...")
 
-        for a in soup.find_all("a"):
-            link = a.get("href")
-            title = a.get_text(strip=True)
+send("✅ Bot started and monitoring multiple Zealy pages")
 
-            if link and "/quests/" in link:
-                full_link = "https://zealy.io" + link
-                content = title + full_link
-                task_hash = hashlib.md5(content.encode()).hexdigest()
+# Store initial hashes
+last_hashes = {}
+for url in URLS:
+    last_hashes[url] = get_hash(url)
 
-                tasks.append({
-                    "title": title,
-                    "link": full_link,
-                    "hash": task_hash
-                })
+# 🔹 LOOP
+while True:
+    for url in URLS:
+        new_hash = get_hash(url)
 
-        return tasks
+        if new_hash and new_hash != last_hashes.get(url):
+            send(f"🚨 Update detected!\n{url}\nTasks may be live NOW!")
+            last_hashes[url] = new_hash
 
-    except Exception as e:
-        logging.error(f"Fetch failed {url}: {e}")
-        return []
-
-# =========================
-# MAIN LOOP
-# =========================
-def monitor():
-    logging.info("🚀 Zealy HTML monitor started...")
-
-    while True:
-        try:
-            for url in URLS:
-                tasks = fetch_tasks(url)
-
-                for task in tasks:
-                    task_id = task["link"]
-
-                    if task_id not in seen_tasks:
-                        seen_tasks[task_id] = task["hash"]
-
-                        msg = f"🔥 NEW TASK\nSource: {url}\n{task['title']}\n{task['link']}"
-                        logging.info(msg)
-                        send_telegram(msg)
-
-                    elif seen_tasks[task_id] != task["hash"]:
-                        seen_tasks[task_id] = task["hash"]
-
-                        msg = f"⚡ UPDATED TASK\nSource: {url}\n{task['title']}\n{task['link']}"
-                        logging.info(msg)
-                        send_telegram(msg)
-
-            delay = random.uniform(MIN_DELAY, MAX_DELAY)
-            time.sleep(delay)
-
-        except Exception as e:
-            logging.error(f"Loop error: {e}")
-            time.sleep(5)
-
-# =========================
-# RUN (FIXED INDENTATION)
-# =========================
-if __name__ == "__main__":
-    while True:
-        try:
-            monitor()
-        except Exception as e:
-            logging.error(f"Critical crash: {e}")
-            time.sleep(10)
+    time.sleep(10)  # adjust to 3-5 sec if you want faster alerts
