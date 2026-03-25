@@ -50,11 +50,20 @@ def send_telegram(msg):
             logging.error(f"Telegram error: {e}")
 
 # =========================
-# GRAPHQL FETCH
+# GRAPHQL FETCH (FIXED)
 # =========================
 def fetch_tasks(community):
     try:
-        url = "https://api.zealy.io/graphql"
+        url = "https://graphql.zealy.io/graphql"
+
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+            "Origin": "https://zealy.io",
+            "Referer": f"https://zealy.io/c/{community}/questboard",
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
 
         query = {
             "operationName": "GetCommunityQuests",
@@ -75,16 +84,15 @@ def fetch_tasks(community):
             """
         }
 
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": random.choice([
-                "Mozilla/5.0",
-                "Mozilla/5.0 (Linux; Android 13)",
-                "Mozilla/5.0 (iPhone)"
-            ])
-        }
+        # small human-like delay
+        time.sleep(random.uniform(1, 2))
 
         res = requests.post(url, json=query, headers=headers, timeout=15)
+
+        if res.status_code == 403:
+            logging.warning(f"⚠️ 403 blocked on {community}")
+            return []
+
         res.raise_for_status()
 
         data = res.json()
@@ -127,12 +135,14 @@ def monitor():
                     seen_tasks[task_id] = task["hash"]
 
                     msg = f"🔥 NEW TASK\nCommunity: {community}\n{task['title']}\n{task['link']}"
+                    logging.info(msg)
                     send_telegram(msg)
 
                 elif seen_tasks[task_id] != task["hash"]:
                     seen_tasks[task_id] = task["hash"]
 
                     msg = f"⚡ UPDATED TASK\nCommunity: {community}\n{task['title']}\n{task['link']}"
+                    logging.info(msg)
                     send_telegram(msg)
 
         time.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
