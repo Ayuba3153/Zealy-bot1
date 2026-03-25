@@ -31,6 +31,7 @@ CHAT_IDS = [
 # LOGGING
 # =========================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
+
 seen_tasks = {}
 
 # =========================
@@ -40,76 +41,97 @@ def send_telegram(msg):
     for chat_id in CHAT_IDS:
         try:
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-            data = {
-                "chat_id": chat_id,
-                "text": msg,
-                "disable_web_page_preview": True
-            }
+            data = {"chat_id": chat_id, "text": msg}
             requests.post(url, data=data, timeout=10)
         except Exception as e:
             logging.error(f"Telegram error: {e}")
 
 # =========================
-# FETCH AND PARSE TASKS
+# FETCH
 # =========================
 def fetch_tasks(url):
     try:
         headers = {
-            "User-Agent": random.choice([
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                "Mozilla/5.0 (Linux; Android 13)",
-                "Mozilla/5.0 (iPhone)"
-            ]),
-            "Referer": url,
-            "Origin": "https://zealy.io"
+            "User-Agent": "Mozilla/5.0",
+            "Referer": url
         }
 
-        res = requests.get(url, headers=headers, timeout=15)
-        res.raise_for_status()
+        response = requests.get(url, headers=headers, timeout=15)
 
-        soup = BeautifulSoup(res.text, "html.parser")
+        if response.status_code != 200:
+            logging.warning(f"Bad response {response.status_code} from {url}")
+            return []
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
         tasks = []
 
         for a in soup.find_all("a"):
-            title = a.get_text(strip=True)
             link = a.get("href")
+            title = a.get_text(strip=True)
 
-            if title and link and "/quests/" in link:
+            if link and "/quests/" in link:
                 full_link = "https://zealy.io" + link
-                content = title + full_link + (a.parent.get_text(" ", strip=True) if a.parent else "")
+                content = title + full_link
                 task_hash = hashlib.md5(content.encode()).hexdigest()
-                tasks.append({"title": title, "link": full_link, "hash": task_hash})
+
+                tasks.append({
+                    "title": title,
+                    "link": full_link,
+                    "hash": task_hash
+                })
 
         return tasks
 
     except Exception as e:
-        logging.error(f"Fetch error ({url}): {e}")
+        logging.error(f"Fetch failed {url}: {e}")
         return []
 
 # =========================
-# MAIN MONITOR
+# MAIN LOOP
 # =========================
 def monitor():
-    global seen_tasks
     logging.info("🚀 Zealy HTML monitor started...")
 
     while True:
-        for url in URLS:
-            tasks = fetch_tasks(url)
+        try:
+            for url in URLS:
+                tasks = fetch_tasks(url)
 
-            for task in tasks:
-                task_id = task["link"]
+                for task in tasks:
+                    task_id = task["link"]
 
-                if task_id not in seen_tasks:
-                    seen_tasks[task_id] = task["hash"]
-                    msg = f"🔥 NEW TASK\nSource: {url}\n{task['title']}\n{task['link']}"
-                    logging.info(msg)
-                    send_telegram(msg)
+                    if task_id not in seen_tasks:
+                        seen_tasks[task_id] = task["hash"]
 
-                elif seen_tasks[task_id] != task["hash"]:
-                    seen_tasks[task_id] = task["hash"]
-                    msg = f"⚡ UPDATED TASK\nSource: {url}\n{task['title']}\n{task['link']}"
-                    logging.info(msg)
+                        msg = f"🔥 NEW TASK\n{task['title']}\n{task['link']}"
+                        logging.info(msg)
+                        send_telegram(msg)
+
+                    elif seen_tasks[task_id] != task["hash"]:
+                        seen_tasks[task_id] = task["hash"]
+
+                        msg = f"⚡ UPDATED TASK\n{task['title']}\n{task['link']}"
+                        logging.info(msg)
+                        send_telegram(msg)
+
+            delay = random.uniform(MIN_DELAY, MAX_DELAY)
+            time.sleep(delay)
+
+        except Exception as e:
+            logging.error(f"Loop error: {e}")
+            time.sleep(5)
+
+# =========================
+# RUN
+# =========================
+if __name__ == "__main__":
+    while True:
+        try:
+            monitor()
+        except Exception as e:
+            logging.error(f"Critical crash: {e}")
+            time.sleep(10)                    logging.info(msg)
                     send_telegram(msg)
 
         time.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
