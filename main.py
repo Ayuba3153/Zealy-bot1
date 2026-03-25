@@ -41,19 +41,24 @@ def send_telegram(msg):
     for chat_id in CHAT_IDS:
         try:
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-            data = {"chat_id": chat_id, "text": msg}
+            data = {
+                "chat_id": chat_id,
+                "text": msg,
+                "disable_web_page_preview": True
+            }
             requests.post(url, data=data, timeout=10)
         except Exception as e:
             logging.error(f"Telegram error: {e}")
 
 # =========================
-# FETCH
+# FETCH TASKS
 # =========================
 def fetch_tasks(url):
     try:
         headers = {
             "User-Agent": "Mozilla/5.0",
-            "Referer": url
+            "Referer": url,
+            "Origin": "https://zealy.io"
         }
 
         response = requests.get(url, headers=headers, timeout=15)
@@ -104,14 +109,14 @@ def monitor():
                     if task_id not in seen_tasks:
                         seen_tasks[task_id] = task["hash"]
 
-                        msg = f"🔥 NEW TASK\n{task['title']}\n{task['link']}"
+                        msg = f"🔥 NEW TASK\nSource: {url}\n{task['title']}\n{task['link']}"
                         logging.info(msg)
                         send_telegram(msg)
 
                     elif seen_tasks[task_id] != task["hash"]:
                         seen_tasks[task_id] = task["hash"]
 
-                        msg = f"⚡ UPDATED TASK\n{task['title']}\n{task['link']}"
+                        msg = f"⚡ UPDATED TASK\nSource: {url}\n{task['title']}\n{task['link']}"
                         logging.info(msg)
                         send_telegram(msg)
 
@@ -123,7 +128,7 @@ def monitor():
             time.sleep(5)
 
 # =========================
-# RUN
+# RUN (FIXED INDENTATION)
 # =========================
 if __name__ == "__main__":
     while True:
@@ -131,30 +136,4 @@ if __name__ == "__main__":
             monitor()
         except Exception as e:
             logging.error(f"Critical crash: {e}")
-            time.sleep(10)                    logging.info(msg)
-                    send_telegram(msg)
-
-        time.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
-
-# =========================
-# RUN
-# =========================
-if __name__ == "__main__":
-    while True:
-        try:
-            monitor()
-        except Exception as e:
-            logging.error(f"CRASH: {e}")
-            time.sleep(3)
-        time.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
-
-# =========================
-# RUN
-# =========================
-if __name__ == "__main__":
-    while True:
-        try:
-            monitor()
-        except Exception as e:
-            logging.error(f"CRASH: {e}")
-            time.sleep(4)
+            time.sleep(10)
