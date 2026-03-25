@@ -74,4 +74,4 @@ while True:
             send(f"🚨 Update detected!\n{url}\nTasks may be live NOW!")
             last_hashes[url] = new_hash
 
-    time.sleep(10)  # adjust to 3-5 sec if you want faster alerts
+    time.sleep(5)  # adjust to 3-5 sec if you want faster alerts
